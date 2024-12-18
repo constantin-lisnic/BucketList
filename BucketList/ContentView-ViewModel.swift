@@ -8,6 +8,8 @@
 import Foundation
 import MapKit
 import LocalAuthentication
+import CoreHaptics
+import SwiftUI
 
 extension ContentView {
     @Observable
@@ -15,6 +17,16 @@ extension ContentView {
         private(set) var locations: [Location]
         var selectedPlace: Location?
         var isUnlocked = false
+        
+        var isHybridMode: Bool = UserDefaults.standard.bool(forKey: "isHybridMode") {
+            didSet {
+                UserDefaults.standard.set(isHybridMode, forKey: "isHybridMode")
+            }
+        }
+        
+        var isAuthenticationError: Bool = false
+        
+        var engine: CHHapticEngine?
 
         let savePath = URL.documentsDirectory.appending(path: "SavedPlaces")
 
@@ -72,11 +84,53 @@ extension ContentView {
                     if success {
                         self.isUnlocked = true
                     } else {
-                        // error
+                        self.isAuthenticationError = true
                     }
                 }
             } else {
                 // no biometrics
+            }
+        }
+        
+        func prepareHaptics() {
+            guard CHHapticEngine.capabilitiesForHardware().supportsHaptics else {
+                return
+            }
+
+            do {
+                engine = try CHHapticEngine()
+                try engine?.start()
+            } catch {
+                print(
+                    "There was an error creating the engine: \(error.localizedDescription)"
+                )
+            }
+        }
+
+        func LongPressGestureHapticFeedback() {
+            // make sure that the device supports haptics
+            guard CHHapticEngine.capabilitiesForHardware().supportsHaptics else {
+                return
+            }
+            var events = [CHHapticEvent]()
+
+            // create one intense, sharp tap
+            let intensity = CHHapticEventParameter(
+                parameterID: .hapticIntensity, value: 1)
+            let sharpness = CHHapticEventParameter(
+                parameterID: .hapticSharpness, value: 1)
+            let event = CHHapticEvent(
+                eventType: .hapticTransient, parameters: [intensity, sharpness],
+                relativeTime: 0)
+            events.append(event)
+
+            // convert those events into a pattern and play it immediately
+            do {
+                let pattern = try CHHapticPattern(events: events, parameters: [])
+                let player = try engine?.makePlayer(with: pattern)
+                try player?.start(atTime: 0)
+            } catch {
+                print("Failed to play pattern: \(error.localizedDescription).")
             }
         }
     }

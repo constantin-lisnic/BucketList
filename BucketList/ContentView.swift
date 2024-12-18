@@ -5,14 +5,11 @@
 //  Created by Constantin Lisnic on 18/12/2024.
 //
 
-import CoreHaptics
 import MapKit
 import SwiftUI
 
 struct ContentView: View {
     @State private var viewModel = ViewModel()
-
-    @State private var engine: CHHapticEngine?
 
     let startPosition = MapCameraPosition.region(
         MKCoordinateRegion(
@@ -40,13 +37,14 @@ struct ContentView: View {
                                     LongPressGesture().onEnded { _ in
                                         viewModel.selectedPlace = location
 
-                                        LongPressGestureHapticFeedback()
+                                        viewModel.LongPressGestureHapticFeedback()
                                     }
                                 )
                         }
                     }
                 }
-                .onAppear(perform: prepareHaptics)
+                .mapStyle(viewModel.isHybridMode ? .hybrid : .standard)
+                .onAppear(perform: viewModel.prepareHaptics)
                 .onTapGesture { position in
                     if let coordinate = proxy.convert(position, from: .local) {
                         viewModel.addLocation(at: coordinate)
@@ -58,6 +56,9 @@ struct ContentView: View {
                     }
                 }
             }
+            Toggle("Hybrid mode", isOn: $viewModel.isHybridMode)
+                .padding(.horizontal)
+
         } else {
             Button("Unlock") {
                 viewModel.authenticate()
@@ -66,48 +67,14 @@ struct ContentView: View {
             .background(.blue)
             .foregroundStyle(.white)
             .clipShape(.capsule)
-        }
-    }
-
-    func prepareHaptics() {
-        guard CHHapticEngine.capabilitiesForHardware().supportsHaptics else {
-            return
-        }
-
-        do {
-            engine = try CHHapticEngine()
-            try engine?.start()
-        } catch {
-            print(
-                "There was an error creating the engine: \(error.localizedDescription)"
-            )
-        }
-    }
-
-    func LongPressGestureHapticFeedback() {
-        // make sure that the device supports haptics
-        guard CHHapticEngine.capabilitiesForHardware().supportsHaptics else {
-            return
-        }
-        var events = [CHHapticEvent]()
-
-        // create one intense, sharp tap
-        let intensity = CHHapticEventParameter(
-            parameterID: .hapticIntensity, value: 1)
-        let sharpness = CHHapticEventParameter(
-            parameterID: .hapticSharpness, value: 1)
-        let event = CHHapticEvent(
-            eventType: .hapticTransient, parameters: [intensity, sharpness],
-            relativeTime: 0)
-        events.append(event)
-
-        // convert those events into a pattern and play it immediately
-        do {
-            let pattern = try CHHapticPattern(events: events, parameters: [])
-            let player = try engine?.makePlayer(with: pattern)
-            try player?.start(atTime: 0)
-        } catch {
-            print("Failed to play pattern: \(error.localizedDescription).")
+            .alert(
+                "Authenticatin error",
+                isPresented: $viewModel.isAuthenticationError
+            ) {
+                Button("OK") {}
+            } message: {
+                Text("Try again")
+            }
         }
     }
 }
